@@ -78,14 +78,14 @@ function buildHardestPayload(players) {
 
   const container = new ContainerBuilder(); // sin setAccentColor => sin barra de color
   container.addTextDisplayComponents(...parts.header.map(text));
-  container.addSeparatorComponents(line(SeparatorSpacingSize.Large));
+  container.addSeparatorComponents(line(SeparatorSpacingSize.Small));
 
   parts.body.forEach((block, i) => {
     if (i > 0) container.addSeparatorComponents(gap(SeparatorSpacingSize.Small));
     container.addTextDisplayComponents(text(block));
   });
 
-  container.addSeparatorComponents(line(SeparatorSpacingSize.Large));
+  container.addSeparatorComponents(line(SeparatorSpacingSize.Small));
   container.addTextDisplayComponents(...parts.footer.map(text));
 
   return {

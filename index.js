@@ -2,6 +2,7 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Events, MessageFlags } = require('discord.js');
 const update = require('./src/commands/update');
 const setup = require('./src/commands/setup');
+const { ownerCount } = require('./src/permissions');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -12,6 +13,8 @@ const commands = new Map([
 
 client.once(Events.ClientReady, (c) => {
   console.log(`✅ Bot de GD listo como ${c.user.tag}`);
+  if (!ownerCount()) console.warn('⚠️ OWNER_IDS está vacío: nadie tiene acceso total de dueño.');
+  else console.log(`👑 Dueños configurados: ${ownerCount()}`);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {

@@ -1,17 +1,13 @@
-const {
-  SlashCommandBuilder,
-  PermissionFlagsBits,
-  InteractionContextType,
-  ChannelType,
-  MessageFlags,
-} = require('discord.js');
+const { SlashCommandBuilder, InteractionContextType, ChannelType, MessageFlags } = require('discord.js');
 const { setupHardest } = require('../hardestPublisher');
+const { canManage } = require('../permissions');
 
 // /setup embed hardest canal:#canal
+// No se usa setDefaultMemberPermissions: Discord ocultaría el comando incluso a los dueños del bot.
+// El permiso (Gestionar servidor, o ser dueño por OWNER_IDS) se comprueba en el código.
 const data = new SlashCommandBuilder()
   .setName('setup')
   .setDescription('Configuración del bot (solo staff)')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .setContexts(InteractionContextType.Guild)
   .addSubcommandGroup((group) =>
     group
@@ -32,8 +28,7 @@ const data = new SlashCommandBuilder()
   );
 
 async function execute(interaction) {
-  // Aunque Discord ya limita el comando, se vuelve a comprobar (el servidor puede cambiar los permisos)
-  if (!interaction.inGuild() || !interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+  if (!canManage(interaction)) {
     return interaction.reply({
       content: '❌ Solo el staff con el permiso **Gestionar servidor** puede usar este comando.',
       flags: MessageFlags.Ephemeral,
