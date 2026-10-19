@@ -40,7 +40,7 @@ function buildHardestEmbed(players) {
 
   const blocks = top.length
     ? top.map((p, i) => playerBlock(p, i + 1)).join('\n\n')
-    : '*Todavía no hay nadie en el Hardest. ¡Sé el primero!*';
+    : 'Todavía no hay nadie en el Hardest. ¡Sé el primero!';
 
   const description = [
     '**Top Players / Hardest**',
@@ -51,7 +51,7 @@ function buildHardestEmbed(players) {
   ].join('\n');
 
   return new EmbedBuilder()
-    .setTitle('Server Hardest 💀')
+    .setTitle('Server Hardest <:star:1561862697191088288>')
     .setDescription(description)
     .setColor(EMBED_COLOR)
     .setFooter({ text: FOOTER_TEXT });
