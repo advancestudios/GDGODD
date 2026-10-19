@@ -49,10 +49,10 @@ const line = (spacing) => new SeparatorBuilder().setDivider(true).setSpacing(spa
 const gap = (spacing) => new SeparatorBuilder().setDivider(false).setSpacing(spacing);
 
 function buildContents(ranked) {
-  const header = ['# Server Hardest <:gdestrella:1502175422014689454>', '-# Top Players / Hardest'];
+  const header = ['# Server Hardest <:star:1561862697191088288>', '-# Top Players / Hardest'];
   const body = ranked.length
     ? ranked.map((p, i) => playerBlock(p, i + 1))
-    : ['*Todavía no hay nadie en el Hardest. ¡Sé el primero!*'];
+    : ['Todavía no hay nadie en el Hardest. ¡Sé el primero!'];
   const footer = [
     '-# Para actualizar tu Hardest, usa `/update hardest` y sigue los pasos dentro del cuadro de Diálogo.',
     `-# ${FOOTER_TEXT}`,
