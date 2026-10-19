@@ -8,8 +8,10 @@ const DATA_FILE = path.join(DATA_DIR, 'hardest.json');
 const DEFAULT_DATA = {
   // Mensaje del Hardest que se edita en cada actualización (lo fija /setup embed hardest)
   message: { guildId: null, channelId: null, messageId: null },
-  // userId -> { userId, name (miembro de Discord), gdName (username de GD), level, top, levelId, worstFail, video, updatedAt }
+  // userId -> { userId, name (miembro de Discord), gdName (username de GD), accountId, level, top, levelId, worstFail, video, updatedAt }
   players: {},
+  // userId de Discord -> { accountId, gdName, linkedAt }  (cuenta de GD verificada)
+  accounts: {},
 };
 
 function load() {
@@ -19,6 +21,7 @@ function load() {
     return {
       message: { ...DEFAULT_DATA.message, ...(parsed.message || {}) },
       players: parsed.players || {},
+      accounts: parsed.accounts || {},
     };
   } catch (err) {
     if (err.code !== 'ENOENT') console.error('[hardestStore] No se pudo leer el JSON, se usa vacío:', err);
@@ -51,4 +54,60 @@ function setMessage({ guildId, channelId, messageId }) {
   save(data);
 }
 
-module.exports = { load, save, getPlayer, upsertPlayer, setMessage, DATA_FILE };
+// ---------- Cuentas de GD vinculadas ----------
+
+function getAccount(userId) {
+  return load().accounts[userId] || null;
+}
+
+/** userId de Discord que ya tiene vinculada esa cuenta de GD (o null) */
+function findOwnerOfAccount(accountId) {
+  const wanted = String(accountId);
+  for (const [userId, account] of Object.entries(load().accounts)) {
+    if (account.accountId === wanted) return userId;
+  }
+  return null;
+}
+
+/** Vincula una cuenta de GD a un usuario. Una cuenta de GD solo puede estar con un usuario de Discord. */
+function linkAccount(userId, { accountId, gdName }) {
+  const ownerId = findOwnerOfAccount(accountId);
+  if (ownerId && ownerId !== userId) return { ok: false, ownerId };
+
+  const data = load();
+  data.accounts[userId] = { accountId: String(accountId), gdName, linkedAt: Date.now() };
+  save(data);
+  return { ok: true };
+}
+
+function updateAccountName(userId, gdName) {
+  const data = load();
+  if (!data.accounts[userId]) return;
+  data.accounts[userId].gdName = gdName;
+  if (data.players[userId]) data.players[userId].gdName = gdName;
+  save(data);
+}
+
+/** Desvincula la cuenta y quita también su entrada del Hardest. Devuelve true si había algo que quitar. */
+function unlinkAccount(userId) {
+  const data = load();
+  const had = Boolean(data.accounts[userId] || data.players[userId]);
+  delete data.accounts[userId];
+  delete data.players[userId];
+  if (had) save(data);
+  return had;
+}
+
+module.exports = {
+  load,
+  save,
+  getPlayer,
+  upsertPlayer,
+  setMessage,
+  getAccount,
+  findOwnerOfAccount,
+  linkAccount,
+  updateAccountName,
+  unlinkAccount,
+  DATA_FILE,
+};

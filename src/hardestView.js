@@ -6,7 +6,7 @@ const {
   MessageFlags,
   escapeMarkdown,
 } = require('discord.js');
-const { TOP_SIZE, FOOTER_TEXT, EMPTY } = require('./config');
+const { TOP_SIZE, TITLE, FOOTER_TEXT, EMPTY, EMOJIS } = require('./config');
 
 // Discord permite como máximo 4000 caracteres de texto sumando todos los bloques de un mensaje
 const MAX_TEXT = 3900;
@@ -30,12 +30,16 @@ function rank(players) {
   });
 }
 
+/** Emoji del puesto (1 a 5) según config.js; vacío si todavía no hay uno */
+const positionEmoji = (position) => (EMOJIS.top[position - 1] || '').trim();
+
 function playerBlock(player, position) {
   const video = player.video ? `[Ver Video](${safeUrl(player.video)})` : code(EMPTY);
-  // Se muestra el Username de GD; si no lo pusieron, el nombre del miembro del servidor
+  // Se muestra el Username de GD (de la cuenta verificada); si no hay, el nombre del miembro del servidor
   const displayName = player.gdName || player.name;
+  const emoji = positionEmoji(position);
   return [
-    `### #${position} - ${escapeMarkdown(displayName)}`,
+    `### #${position} - ${escapeMarkdown(displayName)}${emoji ? ` ${emoji}` : ''}`,
     `• **Nivel:** ${plainOrEmpty(player.level)}`,
     `• **Top:** ${Number.isFinite(player.top) ? player.top : code(EMPTY)}`,
     `• **ID:** ${codeOrEmpty(player.levelId)}`,
@@ -49,10 +53,11 @@ const line = (spacing) => new SeparatorBuilder().setDivider(true).setSpacing(spa
 const gap = (spacing) => new SeparatorBuilder().setDivider(false).setSpacing(spacing);
 
 function buildContents(ranked) {
-  const header = ['# Server Hardest <:star:1561862697191088288>', '-# Top Players / Hardest'];
+  const title = `# ${TITLE}${EMOJIS.star ? ` ${EMOJIS.star}` : ''}`;
+  const header = [title, '-# Top Players / Hardest'];
   const body = ranked.length
     ? ranked.map((p, i) => playerBlock(p, i + 1))
-    : ['Todavía no hay nadie en el Hardest. ¡Sé el primero!'];
+    : ['*Todavía no hay nadie en el Hardest. ¡Sé el primero!*'];
   const footer = [
     '-# Para actualizar tu Hardest, usa `/update hardest` y sigue los pasos dentro del cuadro de Diálogo.',
     `-# ${FOOTER_TEXT}`,

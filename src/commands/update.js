@@ -9,6 +9,8 @@ const {
 const store = require('../hardestStore');
 const { refreshHardest } = require('../hardestPublisher');
 const { lookupLevel, LookupError } = require('../levelLookup');
+const { getAccountById, AccountLookupError } = require('../gdAccount');
+const { showLinkModal } = require('../linkFlow');
 const { parseVideoLink } = require('../videoLink');
 const { EMPTY } = require('../config');
 
@@ -33,9 +35,15 @@ function input(id, label, placeholder, { style = TextInputStyle.Short, max = 100
   return new ActionRowBuilder().addComponents(field);
 }
 
-/** /update hardest -> abre el cuadro de diálogo (modal) con tus datos actuales precargados */
+/**
+ * /update hardest
+ *  - Sin cuenta de GD vinculada: empieza la vinculación (pide el username y luego verifica con un código).
+ *  - Con cuenta vinculada: abre el cuadro de diálogo con tus datos actuales precargados.
+ */
 async function execute(interaction) {
   if (interaction.options.getSubcommand() !== 'hardest') return;
+
+  if (!store.getAccount(interaction.user.id)) return showLinkModal(interaction);
 
   const current = store.getPlayer(interaction.user.id) || {};
 
@@ -43,7 +51,6 @@ async function execute(interaction) {
     .setCustomId(MODAL_ID)
     .setTitle('Actualizar mi Hardest')
     .addComponents(
-      input('gdName', 'Username de GD', 'Tu nombre en Geometry Dash', { max: 32, value: current.gdName }),
       input('levelId', 'ID del nivel', 'Ej: 86407629 (el Nivel y el Top se buscan solos)', {
         max: 12,
         value: current.levelId,
@@ -66,6 +73,28 @@ function cleanText(value) {
 /** Recibe el modal, busca el nivel, guarda los datos y edita el mensaje del Hardest */
 async function handleModal(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  // Solo con cuenta de GD verificada: así nadie actualiza el Hardest haciéndose pasar por otro
+  const account = store.getAccount(interaction.user.id);
+  if (!account) {
+    return interaction.editReply('❌ Primero tienes que vincular tu cuenta de Geometry Dash. Usa `/update hardest` para empezar.');
+  }
+
+  // El username sale de la cuenta verificada; de paso se comprueba que la cuenta siga existiendo
+  let gdName = account.gdName;
+  try {
+    const live = await getAccountById(account.accountId);
+    if (!live) {
+      return interaction.editReply(
+        '❌ No encuentro tu cuenta de Geometry Dash (¿fue eliminada?). Usa `/gd desvincular` y vincula otra cuenta.',
+      );
+    }
+    if (live.name !== account.gdName) store.updateAccountName(interaction.user.id, live.name);
+    gdName = live.name;
+  } catch (err) {
+    if (!(err instanceof AccountLookupError)) console.error('[update hardest] Error consultando la cuenta:', err);
+    // Si GD no responde, se sigue con el username que ya estaba verificado
+  }
 
   const levelId = cleanText(interaction.fields.getTextInputValue('levelId'));
   if (levelId && !/^\d{1,12}$/.test(levelId)) {
@@ -114,7 +143,8 @@ async function handleModal(interaction) {
   store.upsertPlayer({
     userId: interaction.user.id,
     name: interaction.member?.displayName ?? interaction.user.globalName ?? interaction.user.username,
-    gdName: cleanText(interaction.fields.getTextInputValue('gdName')),
+    gdName,
+    accountId: account.accountId,
     level,
     top,
     levelId,

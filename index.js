@@ -2,6 +2,8 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Events, MessageFlags } = require('discord.js');
 const update = require('./src/commands/update');
 const setup = require('./src/commands/setup');
+const gd = require('./src/commands/gd');
+const linkFlow = require('./src/linkFlow');
 const { ownerCount } = require('./src/permissions');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -9,6 +11,7 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const commands = new Map([
   [update.data.name, update],
   [setup.data.name, setup],
+  [gd.data.name, gd],
 ]);
 
 client.once(Events.ClientReady, (c) => {
@@ -22,8 +25,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isChatInputCommand()) {
       return await commands.get(interaction.commandName)?.execute(interaction);
     }
-    if (interaction.isModalSubmit() && interaction.customId === update.MODAL_ID) {
-      return await update.handleModal(interaction);
+    if (interaction.isModalSubmit()) {
+      if (interaction.customId === update.MODAL_ID) return await update.handleModal(interaction);
+      if (interaction.customId === linkFlow.LINK_MODAL_ID) return await linkFlow.handleLinkModal(interaction);
+    }
+    if (linkFlow.isLinkButton(interaction)) {
+      return await linkFlow.handleButton(interaction);
     }
   } catch (err) {
     console.error('[interactionCreate]', err);

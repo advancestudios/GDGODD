@@ -20,16 +20,13 @@
  *  - lanza LookupError      -> no se pudo confirmar nada (reintentar luego)
  */
 
+const { request, parseJson } = require('./http');
+
 const POINTERCRATE_URL = 'https://pointercrate.com/api/v2/demons/listed/';
 const GD_SERVER_URL = 'http://www.boomlings.com/database/getGJLevels21.php';
 const GDBROWSER_URL = 'https://gdbrowser.com/api/level/';
 // Clave pública que usa el juego para sus búsquedas (no es un secreto)
 const GD_SECRET = 'Wmfd2893gb7';
-
-const TIMEOUT_MS = 5000;
-const ATTEMPTS = 2;
-const RETRY_DELAY_MS = 600;
-const RETRY_STATUSES = new Set([429, 502, 503, 504]);
 
 const TTL_FOUND_MS = 10 * 60 * 1000;
 const TTL_MISSING_MS = 2 * 60 * 1000;
@@ -38,42 +35,6 @@ class LookupError extends Error {}
 
 const cache = new Map(); // levelId -> { value, expires }
 const inflight = new Map(); // levelId -> Promise
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-/** Petición con timeout y un reintento. Devuelve { status, body } (el body siempre como texto). */
-async function request(url, { method = 'GET', body, headers = {} } = {}) {
-  let lastError;
-  for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
-    try {
-      const res = await fetch(url, {
-        method,
-        body,
-        headers: { Accept: 'application/json', 'User-Agent': 'bot-gd-urugodd (Discord bot)', ...headers },
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      });
-      const text = await res.text();
-
-      if (RETRY_STATUSES.has(res.status) && attempt < ATTEMPTS) {
-        lastError = new Error(`HTTP ${res.status}`);
-      } else {
-        return { status: res.status, body: text };
-      }
-    } catch (err) {
-      lastError = err; // timeout o corte de red
-    }
-    if (attempt < ATTEMPTS) await sleep(RETRY_DELAY_MS);
-  }
-  throw lastError;
-}
-
-function parseJson(text) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null; // GDBrowser responde "-1" u otro texto cuando no encuentra el nivel
-  }
-}
 
 /** @returns {Promise<{name:string, top:number|null, source:string}|null>} null = no está en la lista */
 async function fromPointercrate(levelId) {

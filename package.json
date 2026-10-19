@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node index.js",
     "deploy": "node deploy-commands.js",
-    "check-level": "node scripts/check-level.js"
+    "check-level": "node scripts/check-level.js",
+    "check-account": "node scripts/check-account.js"
   },
   "engines": {
     "node": ">=18.17"
