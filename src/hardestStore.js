@@ -7,7 +7,7 @@ const DATA_FILE = path.join(DATA_DIR, 'hardest.json');
 const DEFAULT_DATA = {
   // Mensaje del embed que se edita en cada actualización
   message: { channelId: null, messageId: null },
-  // userId -> { userId, name, level, top, levelId, worstFail, video, updatedAt }
+  // userId -> { userId, name (miembro de Discord), gdName (username de GD), level, top, levelId, worstFail, video, updatedAt }
   players: {},
 };
 

@@ -8,6 +8,8 @@ const {
 } = require('discord.js');
 const store = require('../hardestStore');
 const { buildHardestEmbed } = require('../hardestEmbed');
+const { lookupLevel, LookupError } = require('../levelLookup');
+const { parseVideoLink } = require('../videoLink');
 const { EMPTY } = require('../config');
 
 const MODAL_ID = 'hardest_modal';
@@ -41,12 +43,14 @@ async function execute(interaction) {
     .setCustomId(MODAL_ID)
     .setTitle('Actualizar mi Hardest')
     .addComponents(
-      input('level', 'Nivel', 'Ej: Slaughterhouse', { value: current.level }),
-      input('top', 'Top (solo el número)', 'Ej: 37', { max: 5, value: current.top }),
-      input('levelId', 'ID del nivel', 'Ej: 86407629', { max: 12, value: current.levelId }),
+      input('gdName', 'Username de GD', 'Tu nombre en Geometry Dash', { max: 32, value: current.gdName }),
+      input('levelId', 'ID del nivel', 'Ej: 86407629 (el Nivel y el Top se buscan solos)', {
+        max: 12,
+        value: current.levelId,
+      }),
       input('worstFail', 'Peor fallo', 'Ej: 95% x2', { value: current.worstFail }),
-      input('video', 'Link del video de YouTube (Completion)', 'https://youtu.be/...', {
-        max: 300,
+      input('video', 'Link del video (Completion)', 'Enlace del mensaje o de multimedia del video', {
+        max: 1000,
         value: current.video,
       }),
     );
@@ -59,76 +63,48 @@ function cleanText(value) {
   return !text || text.toLowerCase() === EMPTY ? '' : text;
 }
 
-const YOUTUBE_HOSTS = new Set(['youtube.com', 'www.youtube.com', 'm.youtube.com']);
-const YOUTUBE_ID = /^[\w-]{11}$/;
-
-/**
- * Acepta solo links de VIDEO de YouTube (no canales, playlists ni otras webs):
- *  - https://www.youtube.com/watch?v=ID
- *  - https://youtu.be/ID
- *  - https://www.youtube.com/shorts/ID | /live/ID | /embed/ID
- * Devuelve el link normalizado (sin parámetros de tracking).
- */
-function parseYoutubeUrl(value) {
-  const text = cleanText(value);
-  if (!text) return { ok: true, value: '' };
-
-  // Permite pegar "youtube.com/..." sin el https://
-  const candidate = /^https?:\/\//i.test(text) ? text : `https://${text}`;
-
-  try {
-    const url = new URL(candidate);
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return { ok: false };
-
-    const host = url.hostname.toLowerCase();
-    let id = null;
-
-    if (host === 'youtu.be') {
-      id = url.pathname.split('/')[1];
-    } else if (YOUTUBE_HOSTS.has(host)) {
-      const [, kind, pathId] = url.pathname.split('/');
-      if (kind === 'watch') id = url.searchParams.get('v');
-      else if (['shorts', 'live', 'embed'].includes(kind)) id = pathId;
-    }
-
-    if (id && YOUTUBE_ID.test(id)) {
-      return { ok: true, value: `https://www.youtube.com/watch?v=${id}` };
-    }
-  } catch {
-    /* cae al error de abajo */
-  }
-  return { ok: false };
-}
-
-/** Recibe el modal, guarda los datos y edita (o crea) el embed */
+/** Recibe el modal, busca el nivel, guarda los datos y edita (o crea) el embed */
 async function handleModal(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  const rawTop = cleanText(interaction.fields.getTextInputValue('top'));
-  let top = null;
-  if (rawTop) {
-    if (!/^\d{1,5}$/.test(rawTop) || Number(rawTop) < 1) {
-      return interaction.editReply('❌ El **Top** tiene que ser un número entero positivo (ej: `37`).');
-    }
-    top = Number(rawTop);
-  }
-
   const levelId = cleanText(interaction.fields.getTextInputValue('levelId'));
   if (levelId && !/^\d{1,12}$/.test(levelId)) {
-    return interaction.editReply('❌ El **ID del nivel** solo puede tener números.');
+    return interaction.editReply('❌ El **ID del nivel** solo puede tener números (ej: `86407629`).');
   }
 
-  const video = parseYoutubeUrl(interaction.fields.getTextInputValue('video'));
+  const video = parseVideoLink(interaction.fields.getTextInputValue('video'), interaction.guildId);
   if (!video.ok) {
     return interaction.editReply(
-      '❌ El **link del video** tiene que ser un video de YouTube (ej: `https://youtu.be/xxxxxxxxxxx` o `https://www.youtube.com/watch?v=xxxxxxxxxxx`).',
+      video.reason === 'other-server'
+        ? '❌ Ese link de mensaje es de **otro servidor**. Sube el video a un canal de este servidor y copia el enlace desde ahí.'
+        : '❌ El **link del video** no es válido. Sube el video a un canal del servidor y usa **Copiar enlace del mensaje** (o **Copiar enlace de multimedia**) sobre el video.',
     );
+  }
+
+  // Con el ID, el bot busca solo el nombre del nivel y su Top
+  let level = '';
+  let top = null;
+  if (levelId) {
+    try {
+      const found = await lookupLevel(levelId);
+      if (!found) {
+        return interaction.editReply(`❌ No encontré ningún nivel con el ID \`${levelId}\`. Revisa que esté bien escrito.`);
+      }
+      level = found.name;
+      top = found.top;
+    } catch (err) {
+      if (!(err instanceof LookupError)) console.error('[update hardest] Error buscando el nivel:', err);
+      return interaction.editReply(
+        '⚠️ No pude consultar la información del nivel en este momento. No guardé nada: intenta de nuevo en un rato.',
+      );
+    }
   }
 
   const saved = store.upsertPlayer({
     userId: interaction.user.id,
     name: interaction.member?.displayName ?? interaction.user.globalName ?? interaction.user.username,
-    level: cleanText(interaction.fields.getTextInputValue('level')),
+    gdName: cleanText(interaction.fields.getTextInputValue('gdName')),
+    level,
     top,
     levelId,
     worstFail: cleanText(interaction.fields.getTextInputValue('worstFail')),
@@ -141,7 +117,17 @@ async function handleModal(interaction) {
   if (!result.ok) {
     return interaction.editReply(`⚠️ Guardé tus datos, pero no pude actualizar el embed: ${result.reason}`);
   }
-  return interaction.editReply(`✅ ¡Tu Hardest quedó actualizado! ${result.url}`);
+
+  const lines = [`✅ ¡Tu Hardest quedó actualizado! ${result.url}`];
+  if (levelId) {
+    lines.push(`📌 Nivel: **${level}** — ${top ? `Top **${top}**` : 'no está en la Demon List (Top sin definir)'}`);
+  }
+  if (video.kind === 'cdn') {
+    lines.push(
+      '⚠️ Usaste un enlace de multimedia: Discord hace que esos links caduquen con el tiempo. Para que el video no deje de abrir, mejor usa **Copiar enlace del mensaje**.',
+    );
+  }
+  return interaction.editReply(lines.join('\n'));
 }
 
 /** Edita el mensaje existente; si no existe (o lo borraron), crea uno nuevo */
@@ -169,4 +155,4 @@ async function publishEmbed(interaction, embed, saved) {
   }
 }
 
-module.exports = { data, execute, handleModal, parseYoutubeUrl, MODAL_ID };
+module.exports = { data, execute, handleModal, MODAL_ID };

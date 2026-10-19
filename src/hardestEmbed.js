@@ -18,10 +18,15 @@ function rank(players) {
   });
 }
 
+// Los paréntesis rompen el link en Markdown, así que se codifican
+const safeUrl = (url) => url.replaceAll('(', '%28').replaceAll(')', '%29');
+
 function playerBlock(player, position) {
-  const video = player.video ? `[Ver Video](${player.video})` : code(EMPTY);
+  const video = player.video ? `[Ver Video](${safeUrl(player.video)})` : code(EMPTY);
+  // Se muestra el Username de GD; si no lo pusieron, el nombre del miembro del servidor
+  const displayName = player.gdName || player.name;
   return [
-    `**#${position} - ${escapeMarkdown(player.name)}**`,
+    `**#${position} - ${escapeMarkdown(displayName)}**`,
     `• **Nivel:** ${plainOrEmpty(player.level)}`,
     `• **Top:** ${Number.isFinite(player.top) ? player.top : code(EMPTY)}`,
     `• **ID:** ${codeOrEmpty(player.levelId)}`,
