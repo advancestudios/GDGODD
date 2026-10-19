@@ -1,8 +1,14 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, Events, MessageFlags } = require('discord.js');
 const update = require('./src/commands/update');
+const setup = require('./src/commands/setup');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+
+const commands = new Map([
+  [update.data.name, update],
+  [setup.data.name, setup],
+]);
 
 client.once(Events.ClientReady, (c) => {
   console.log(`✅ Bot de GD listo como ${c.user.tag}`);
@@ -10,8 +16,8 @@ client.once(Events.ClientReady, (c) => {
 
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
-    if (interaction.isChatInputCommand() && interaction.commandName === 'update') {
-      return await update.execute(interaction);
+    if (interaction.isChatInputCommand()) {
+      return await commands.get(interaction.commandName)?.execute(interaction);
     }
     if (interaction.isModalSubmit() && interaction.customId === update.MODAL_ID) {
       return await update.handleModal(interaction);

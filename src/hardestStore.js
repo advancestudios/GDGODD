@@ -1,12 +1,13 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
+// DATA_DIR permite apuntar a un disco persistente (por ejemplo en Render: /var/data)
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 const DATA_FILE = path.join(DATA_DIR, 'hardest.json');
 
 const DEFAULT_DATA = {
-  // Mensaje del embed que se edita en cada actualización
-  message: { channelId: null, messageId: null },
+  // Mensaje del Hardest que se edita en cada actualización (lo fija /setup embed hardest)
+  message: { guildId: null, channelId: null, messageId: null },
   // userId -> { userId, name (miembro de Discord), gdName (username de GD), level, top, levelId, worstFail, video, updatedAt }
   players: {},
 };
@@ -44,10 +45,10 @@ function upsertPlayer(player) {
   return data;
 }
 
-function setMessage(channelId, messageId) {
+function setMessage({ guildId, channelId, messageId }) {
   const data = load();
-  data.message = { channelId, messageId };
+  data.message = { guildId, channelId, messageId };
   save(data);
 }
 
-module.exports = { load, save, getPlayer, upsertPlayer, setMessage };
+module.exports = { load, save, getPlayer, upsertPlayer, setMessage, DATA_FILE };

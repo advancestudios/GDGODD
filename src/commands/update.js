@@ -7,7 +7,7 @@ const {
   MessageFlags,
 } = require('discord.js');
 const store = require('../hardestStore');
-const { buildHardestEmbed } = require('../hardestEmbed');
+const { refreshHardest } = require('../hardestPublisher');
 const { lookupLevel, LookupError } = require('../levelLookup');
 const { parseVideoLink } = require('../videoLink');
 const { EMPTY } = require('../config');
@@ -63,7 +63,7 @@ function cleanText(value) {
   return !text || text.toLowerCase() === EMPTY ? '' : text;
 }
 
-/** Recibe el modal, busca el nivel, guarda los datos y edita (o crea) el embed */
+/** Recibe el modal, busca el nivel, guarda los datos y edita el mensaje del Hardest */
 async function handleModal(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -82,8 +82,11 @@ async function handleModal(interaction) {
   }
 
   // Con el ID, el bot busca solo el nombre del nivel y su Top
+  const previous = store.getPlayer(interaction.user.id);
   let level = '';
   let top = null;
+  let lookupNote = '';
+
   if (levelId) {
     try {
       const found = await lookupLevel(levelId);
@@ -94,13 +97,21 @@ async function handleModal(interaction) {
       top = found.top;
     } catch (err) {
       if (!(err instanceof LookupError)) console.error('[update hardest] Error buscando el nivel:', err);
-      return interaction.editReply(
-        '⚠️ No pude consultar la información del nivel en este momento. No guardé nada: intenta de nuevo en un rato.',
-      );
+
+      if (previous?.levelId === levelId && previous.level) {
+        // Mismo nivel que ya tenías guardado: se conservan su nombre y su Top y no se pierde la actualización
+        level = previous.level;
+        top = previous.top ?? null;
+        lookupNote = '⚠️ No pude consultar el nivel ahora, así que dejé el nombre y el Top que ya tenías guardados.';
+      } else {
+        return interaction.editReply(
+          '⚠️ Los servicios de niveles no respondieron en este momento. No guardé nada: intenta de nuevo en un minuto.',
+        );
+      }
     }
   }
 
-  const saved = store.upsertPlayer({
+  store.upsertPlayer({
     userId: interaction.user.id,
     name: interaction.member?.displayName ?? interaction.user.globalName ?? interaction.user.username,
     gdName: cleanText(interaction.fields.getTextInputValue('gdName')),
@@ -111,48 +122,22 @@ async function handleModal(interaction) {
     video: video.value,
   });
 
-  const embed = buildHardestEmbed(saved.players);
-  const result = await publishEmbed(interaction, embed, saved.message);
-
+  const result = await refreshHardest(interaction.client);
   if (!result.ok) {
-    return interaction.editReply(`⚠️ Guardé tus datos, pero no pude actualizar el embed: ${result.reason}`);
+    return interaction.editReply(`⚠️ Guardé tus datos, pero no pude actualizar el Hardest: ${result.reason}`);
   }
 
   const lines = [`✅ ¡Tu Hardest quedó actualizado! ${result.url}`];
   if (levelId) {
     lines.push(`📌 Nivel: **${level}** — ${top ? `Top **${top}**` : 'no está en la Demon List (Top sin definir)'}`);
   }
+  if (lookupNote) lines.push(lookupNote);
   if (video.kind === 'cdn') {
     lines.push(
       '⚠️ Usaste un enlace de multimedia: Discord hace que esos links caduquen con el tiempo. Para que el video no deje de abrir, mejor usa **Copiar enlace del mensaje**.',
     );
   }
   return interaction.editReply(lines.join('\n'));
-}
-
-/** Edita el mensaje existente; si no existe (o lo borraron), crea uno nuevo */
-async function publishEmbed(interaction, embed, saved) {
-  const payload = { embeds: [embed], allowedMentions: { parse: [] } };
-
-  try {
-    if (saved.channelId && saved.messageId) {
-      const channel = await interaction.client.channels.fetch(saved.channelId).catch(() => null);
-      const message = channel ? await channel.messages.fetch(saved.messageId).catch(() => null) : null;
-      if (message) {
-        await message.edit(payload);
-        return { ok: true, url: message.url };
-      }
-    }
-
-    const channelId = process.env.HARDEST_CHANNEL_ID || interaction.channelId;
-    const channel = await interaction.client.channels.fetch(channelId);
-    const message = await channel.send(payload);
-    store.setMessage(channel.id, message.id);
-    return { ok: true, url: message.url };
-  } catch (err) {
-    console.error('[update hardest] Error publicando el embed:', err);
-    return { ok: false, reason: 'revisa que el bot tenga permisos de ver el canal y enviar mensajes.' };
-  }
 }
 
 module.exports = { data, execute, handleModal, MODAL_ID };
