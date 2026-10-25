@@ -3,10 +3,13 @@ const {
   TextDisplayBuilder,
   SeparatorBuilder,
   SeparatorSpacingSize,
+  SectionBuilder,
+  ThumbnailBuilder,
   MessageFlags,
   escapeMarkdown,
 } = require('discord.js');
-const { TOP_SIZE, TITLE, FOOTER_TEXT, EMPTY, EMOJIS } = require('./config');
+const { difficultyIconUrl } = require('./difficulty');
+const { TOP_SIZE, TITLE, SUBTITLE, UPDATE_HINT, FOOTER_TEXT, EMPTY, EMOJIS } = require('./config');
 
 // Discord permite como máximo 4000 caracteres de texto sumando todos los bloques de un mensaje
 const MAX_TEXT = 3900;
@@ -33,33 +36,71 @@ function rank(players) {
 /** Emoji del puesto (1 a 5) según config.js; vacío si todavía no hay uno */
 const positionEmoji = (position) => (EMOJIS.top[position - 1] || '').trim();
 
-function playerBlock(player, position) {
-  const video = player.video ? `[Ver Video](${safeUrl(player.video)})` : code(EMPTY);
-  // Se muestra el Username de GD (de la cuenta verificada); si no hay, el nombre del miembro del servidor
-  const displayName = player.gdName || player.name;
+const videoLink = (player) => (player.video ? `[Ver Video](${safeUrl(player.video)})` : code(EMPTY));
+// Se muestra el Username de GD (de la cuenta verificada); si no hay, el nombre del miembro del servidor
+const displayName = (player) => player.gdName || player.name;
+
+/**
+ * Junta a los jugadores que tienen el mismo nivel en una sola entrada (el orden se mantiene:
+ * cada grupo queda en la posición de su mejor miembro). Sin ID de nivel no se agrupa.
+ */
+function groupByLevel(ranked) {
+  const groups = [];
+  const byLevel = new Map();
+  for (const player of ranked) {
+    const existing = player.levelId ? byLevel.get(player.levelId) : null;
+    if (existing) {
+      existing.push(player);
+    } else {
+      const members = [player];
+      groups.push(members);
+      if (player.levelId) byLevel.set(player.levelId, members);
+    }
+  }
+  return groups;
+}
+
+function entryBlock(members, position) {
+  const [first] = members;
   const emoji = positionEmoji(position);
-  return [
-    `### #${position} - ${escapeMarkdown(displayName)}${emoji ? ` ${emoji}` : ''}`,
-    `• **Nivel:** ${plainOrEmpty(player.level)}`,
-    `• **Top:** ${Number.isFinite(player.top) ? player.top : code(EMPTY)}`,
-    `• **ID:** ${codeOrEmpty(player.levelId)}`,
-    `• **Peor Fallo:** ${codeOrEmpty(player.worstFail)}`,
-    `• **Completion >>** ${video}`,
-  ].join('\n');
+  const names = members.map((member) => escapeMarkdown(displayName(member))).join(' & ');
+  const lines = [
+    `### #${position} - ${names}${emoji ? ` ${emoji}` : ''}`,
+    `• **Nivel:** ${plainOrEmpty(first.level)}`,
+    `• **Top:** ${Number.isFinite(first.top) ? first.top : code(EMPTY)}`,
+    `• **ID:** ${codeOrEmpty(first.levelId)}`,
+  ];
+  if (members.length === 1) {
+    lines.push(`• **Peor Fallo:** ${codeOrEmpty(first.worstFail)}`, `• **Completion >>** ${videoLink(first)}`);
+  } else {
+    for (const member of members) {
+      lines.push(
+        `• **${escapeMarkdown(displayName(member))}:** Peor Fallo ${codeOrEmpty(member.worstFail)} · Completion >> ${videoLink(member)}`,
+      );
+    }
+  }
+  return { text: lines.join('\n'), iconUrl: difficultyIconUrl(first.difficulty) };
 }
 
 const text = (content) => new TextDisplayBuilder().setContent(content);
 const line = (spacing) => new SeparatorBuilder().setDivider(true).setSpacing(spacing);
 const gap = (spacing) => new SeparatorBuilder().setDivider(false).setSpacing(spacing);
 
-function buildContents(ranked) {
+const entryComponent = ({ text: content, iconUrl }) =>
+  iconUrl
+    ? new SectionBuilder()
+        .addTextDisplayComponents(text(content))
+        .setThumbnailAccessory(new ThumbnailBuilder().setURL(iconUrl))
+    : text(content);
+
+function buildContents(groups) {
   const title = `# ${TITLE}${EMOJIS.star ? ` ${EMOJIS.star}` : ''}`;
-  const header = [title, '-# Top Players / Hardest'];
-  const body = ranked.length
-    ? ranked.map((p, i) => playerBlock(p, i + 1))
-    : ['*Todavía no hay nadie en el Hardest. ¡Sé el primero!*'];
+  const header = [title, `-# ${SUBTITLE}`];
+  const body = groups.length
+    ? groups.map((members, i) => entryBlock(members, i + 1))
+    : [{ text: '*Todavía no hay nadie en el Hardest. ¡Sé el primero!*', iconUrl: null }];
   const footer = [
-    '-# Para actualizar tu Hardest, usa `/update hardest` y sigue los pasos dentro del cuadro de Diálogo.',
+    `-# ${UPDATE_HINT}`,
     `-# ${FOOTER_TEXT}`,
   ];
   return { header, body, footer };
@@ -70,15 +111,15 @@ function buildContents(ranked) {
  * Se muestran los mejores TOP_SIZE jugadores en el mismo formato (#1, #2, ...).
  */
 function buildHardestPayload(players) {
-  const ranked = rank(players);
-  let shown = Math.min(TOP_SIZE, ranked.length);
+  const groups = groupByLevel(rank(players));
+  let shown = Math.min(TOP_SIZE, groups.length);
 
   // Seguro por si los textos (links largos, etc.) pasaran del límite de Discord
-  let parts = buildContents(ranked.slice(0, shown));
-  const size = (p) => [...p.header, ...p.body, ...p.footer].join('').length;
+  let parts = buildContents(groups.slice(0, shown));
+  const size = (p) => [...p.header, ...p.body.map((b) => b.text), ...p.footer].join('').length;
   while (shown > 1 && size(parts) > MAX_TEXT) {
     shown -= 1;
-    parts = buildContents(ranked.slice(0, shown));
+    parts = buildContents(groups.slice(0, shown));
   }
 
   const container = new ContainerBuilder(); // sin setAccentColor => sin barra de color
@@ -87,7 +128,9 @@ function buildHardestPayload(players) {
 
   parts.body.forEach((block, i) => {
     if (i > 0) container.addSeparatorComponents(gap(SeparatorSpacingSize.Small));
-    container.addTextDisplayComponents(text(block));
+    const component = entryComponent(block);
+    if (component instanceof SectionBuilder) container.addSectionComponents(component);
+    else container.addTextDisplayComponents(component);
   });
 
   container.addSeparatorComponents(line(SeparatorSpacingSize.Small));
@@ -100,4 +143,4 @@ function buildHardestPayload(players) {
   };
 }
 
-module.exports = { buildHardestPayload, rank };
+module.exports = { buildHardestPayload, rank, groupByLevel, entryBlock };

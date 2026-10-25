@@ -12,7 +12,9 @@ const { lookupLevel, LookupError } = require('../levelLookup');
 const { getAccountById, AccountLookupError } = require('../gdAccount');
 const { showLinkModal } = require('../linkFlow');
 const { parseVideoLink } = require('../videoLink');
-const { EMPTY } = require('../config');
+const { submitForReview } = require('../review');
+const { isAllowedDifficulty } = require('../difficulty');
+const { EMPTY, ALLOWED_DIFFICULTIES } = require('../config');
 
 const MODAL_ID = 'hardest_modal';
 
@@ -114,6 +116,7 @@ async function handleModal(interaction) {
   const previous = store.getPlayer(interaction.user.id);
   let level = '';
   let top = null;
+  let difficulty = null;
   let lookupNote = '';
 
   if (levelId) {
@@ -122,8 +125,14 @@ async function handleModal(interaction) {
       if (!found) {
         return interaction.editReply(`❌ No encontré ningún nivel con el ID \`${levelId}\`. Revisa que esté bien escrito.`);
       }
+      if (!isAllowedDifficulty(found.difficulty)) {
+        return interaction.editReply(
+          `❌ **${found.name}** es **${found.difficulty}** y el Hardest solo acepta: **${ALLOWED_DIFFICULTIES.join(', ')}**.`,
+        );
+      }
       level = found.name;
       top = found.top;
+      difficulty = found.difficulty;
     } catch (err) {
       if (!(err instanceof LookupError)) console.error('[update hardest] Error buscando el nivel:', err);
 
@@ -131,6 +140,7 @@ async function handleModal(interaction) {
         // Mismo nivel que ya tenías guardado: se conservan su nombre y su Top y no se pierde la actualización
         level = previous.level;
         top = previous.top ?? null;
+        difficulty = previous.difficulty ?? null;
         lookupNote = '⚠️ No pude consultar el nivel ahora, así que dejé el nombre y el Top que ya tenías guardados.';
       } else {
         return interaction.editReply(
@@ -140,17 +150,32 @@ async function handleModal(interaction) {
     }
   }
 
-  store.upsertPlayer({
+  const player = {
     userId: interaction.user.id,
     name: interaction.member?.displayName ?? interaction.user.globalName ?? interaction.user.username,
     gdName,
     accountId: account.accountId,
     level,
     top,
+    difficulty,
     levelId,
     worstFail: cleanText(interaction.fields.getTextInputValue('worstFail')),
     video: video.value,
-  });
+  };
+
+  // Con canal de revisión configurado, el staff aprueba antes de publicar; sin canal se publica directo
+  if (store.getReviewChannelId()) {
+    const sent = await submitForReview(interaction, player);
+    if (!sent.ok) {
+      return interaction.editReply(`⚠️ No pude enviar tu solicitud al staff: ${sent.reason}`);
+    }
+    const lines = ['📨 ¡Tu actualización fue enviada al staff para revisión! Te aviso por mensaje privado cuando la revisen.'];
+    if (levelId) lines.push(`📌 Nivel: **${level}** — ${top ? `Top **${top}**` : 'no está en la Demon List (Top sin definir)'}`);
+    if (lookupNote) lines.push(lookupNote);
+    return interaction.editReply(lines.join('\n'));
+  }
+
+  store.upsertPlayer(player);
 
   const result = await refreshHardest(interaction.client);
   if (!result.ok) {

@@ -14,8 +14,11 @@
  *  - Consultas iguales en simultáneo comparten una sola petición.
  *  - Cada consulta se reintenta una vez si hay corte de red, timeout o servidor saturado.
  *
+ * Además del nombre y el Top, devuelve la dificultad ("Extreme Demon", "Insane Demon", ...) cuando se puede
+ * determinar (null si no): el Hardest la usa para aceptar solo las dificultades permitidas y para el icono.
+ *
  * lookupLevel() devuelve:
- *  - { name, top, source }  -> nivel encontrado (top puede ser null si no está en la lista)
+ *  - { name, top, difficulty, source } -> nivel encontrado (top puede ser null si no está en la lista)
  *  - null                   -> los servidores oficiales confirmaron que el nivel no existe
  *  - lanza LookupError      -> no se pudo confirmar nada (reintentar luego)
  */
@@ -36,7 +39,7 @@ class LookupError extends Error {}
 const cache = new Map(); // levelId -> { value, expires }
 const inflight = new Map(); // levelId -> Promise
 
-/** @returns {Promise<{name:string, top:number|null, source:string}|null>} null = no está en la lista */
+/** @returns {Promise<{name:string, top:number|null, difficulty:string, source:string}|null>} null = no está en la lista */
 async function fromPointercrate(levelId) {
   const { status, body } = await request(`${POINTERCRATE_URL}?level_id=${levelId}`);
   if (status < 200 || status >= 300) throw new Error(`Pointercrate respondió HTTP ${status}`);
@@ -48,6 +51,8 @@ async function fromPointercrate(levelId) {
   return {
     name: String(demon.name),
     top: Number.isInteger(demon.position) && demon.position > 0 ? demon.position : null,
+    // La Demon List solo incluye Extreme Demons; se afina con los servidores de GD si responden
+    difficulty: 'Extreme Demon',
     source: 'pointercrate',
   };
 }
@@ -65,8 +70,21 @@ function parseGdLevel(raw) {
   return fields;
 }
 
+const GD_DEMON_DIFFICULTY = { 3: 'Easy Demon', 4: 'Medium Demon', 0: 'Hard Demon', 5: 'Insane Demon', 6: 'Extreme Demon' };
+const GD_NORMAL_DIFFICULTY = { 10: 'Easy', 20: 'Normal', 30: 'Hard', 40: 'Harder', 50: 'Insane' };
+
 /**
- * @returns {Promise<{name:string, top:null, source:string}|null>}
+ * Dificultad a partir de los campos de un nivel de GD:
+ *  17 = es demon, 43 = tipo de demon, 25 = es auto, 9 = dificultad normal (10 fácil ... 50 insane)
+ */
+function gdDifficulty(fields) {
+  if (fields['17'] === '1') return GD_DEMON_DIFFICULTY[Number(fields['43'] || 0)] || 'Hard Demon';
+  if (fields['25'] === '1') return 'Auto';
+  return GD_NORMAL_DIFFICULTY[Number(fields['9'] || 0)] || 'NA';
+}
+
+/**
+ * @returns {Promise<{name:string, top:null, difficulty:string, source:string}|null>}
  *   null = los servidores de GD confirmaron que el nivel NO existe ("-1")
  */
 async function fromGdServers(levelId) {
@@ -89,10 +107,10 @@ async function fromGdServers(levelId) {
   if (fields['1'] !== String(levelId) || !fields['2']) {
     throw new Error('Servidores de GD: la respuesta no corresponde a ese ID');
   }
-  return { name: fields['2'], top: null, source: 'gd-servers' };
+  return { name: fields['2'], top: null, difficulty: gdDifficulty(fields), source: 'gd-servers' };
 }
 
-/** @returns {Promise<{name:string, top:number|null, source:string}|null>} null = GDBrowser no lo encontró (no concluyente) */
+/** @returns {Promise<{name:string, top:number|null, difficulty:string|null, source:string}|null>} null = GDBrowser no lo encontró (no concluyente) */
 async function fromGdBrowser(levelId) {
   const { status, body } = await request(`${GDBROWSER_URL}${levelId}`);
   const json = parseJson(body);
@@ -101,6 +119,7 @@ async function fromGdBrowser(levelId) {
     return {
       name: String(json.name),
       top: Number.isInteger(json.demonList) && json.demonList > 0 ? json.demonList : null,
+      difficulty: json.difficulty ? String(json.difficulty) : null,
       source: 'gdbrowser',
     };
   }
@@ -112,7 +131,12 @@ async function search(levelId) {
   // 1) Demon List (Top + nombre)
   try {
     const listed = await fromPointercrate(levelId);
-    if (listed) return listed;
+    if (listed) {
+      // Mejor esfuerzo: los servidores de GD dicen la dificultad exacta; si fallan se queda "Extreme Demon"
+      const gd = await fromGdServers(levelId).catch(() => null);
+      if (gd?.difficulty) listed.difficulty = gd.difficulty;
+      return listed;
+    }
   } catch (err) {
     console.warn('[levelLookup] Pointercrate falló:', err.message);
   }
@@ -164,5 +188,5 @@ module.exports = {
   LookupError,
   // Para el script de diagnóstico y las pruebas
   sources: { fromPointercrate, fromGdServers, fromGdBrowser },
-  _internals: { request, parseGdLevel },
+  _internals: { request, parseGdLevel, gdDifficulty },
 };

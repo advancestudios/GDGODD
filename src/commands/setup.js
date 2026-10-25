@@ -1,4 +1,5 @@
-const { SlashCommandBuilder, InteractionContextType, ChannelType, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, InteractionContextType, ChannelType, MessageFlags, PermissionFlagsBits } = require('discord.js');
+const store = require('../hardestStore');
 const { setupHardest } = require('../hardestPublisher');
 const { canManage } = require('../permissions');
 
@@ -25,6 +26,26 @@ const data = new SlashCommandBuilder()
               .setRequired(true),
           ),
       ),
+  )
+  .addSubcommandGroup((group) =>
+    group
+      .setName('revision')
+      .setDescription('Revisión de las actualizaciones del Hardest')
+      .addSubcommand((sub) =>
+        sub
+          .setName('canal')
+          .setDescription('Canal donde el staff aprueba o rechaza las actualizaciones del Hardest')
+          .addChannelOption((option) =>
+            option
+              .setName('canal')
+              .setDescription('Canal de revisión (solo para el staff)')
+              .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+              .setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub.setName('desactivar').setDescription('Desactiva la revisión: las actualizaciones se publican directo'),
+      ),
   );
 
 async function execute(interaction) {
@@ -39,6 +60,39 @@ async function execute(interaction) {
   const sub = interaction.options.getSubcommand();
 
   if (group === 'embed' && sub === 'hardest') return setupHardestEmbed(interaction);
+  if (group === 'revision') return setupReview(interaction, sub);
+}
+
+async function setupReview(interaction, sub) {
+  if (sub === 'desactivar') {
+    store.setReviewChannel(null);
+    return interaction.reply({
+      content: '✅ Revisión desactivada: ahora las actualizaciones se publican directo. Las solicitudes pendientes quedan sin efecto hasta que vuelvas a activarla.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const picked = interaction.options.getChannel('canal', true);
+  const channel = await interaction.guild.channels.fetch(picked.id).catch(() => null);
+  if (!channel) {
+    return interaction.reply({ content: '❌ No pude acceder a ese canal. Revisa que el bot lo pueda ver.', flags: MessageFlags.Ephemeral });
+  }
+
+  const me = await interaction.guild.members.fetchMe();
+  const perms = channel.permissionsFor(me);
+  const missing = ['ViewChannel', 'SendMessages'].filter((flag) => !perms?.has(PermissionFlagsBits[flag]));
+  if (missing.length) {
+    return interaction.reply({
+      content: `❌ Al bot le faltan permisos en ${channel}: **${missing.join(', ')}**.`,
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  store.setReviewChannel(channel.id);
+  return interaction.reply({
+    content: `✅ Listo: las actualizaciones del Hardest ahora llegan a ${channel} para que el staff las acepte o rechace. Cada miembro recibirá el resultado por mensaje privado.`,
+    flags: MessageFlags.Ephemeral,
+  });
 }
 
 async function setupHardestEmbed(interaction) {
