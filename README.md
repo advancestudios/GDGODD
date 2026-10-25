@@ -21,9 +21,32 @@ Variables del `.env`: ver [`.env.example`](.env.example).
 | Comando | Quién | Qué hace |
 | --- | --- | --- |
 | `/setup embed hardest canal:#canal` | Staff (Gestionar servidor) o dueños | Envía el embed al canal y lo deja configurado para editarlo ahí |
+| `/setup revision canal canal:#canal` | Staff o dueños | Activa la revisión: las actualizaciones llegan a ese canal con botones Aceptar / Rechazar |
+| `/setup revision desactivar` | Staff o dueños | Desactiva la revisión: las actualizaciones se publican directo |
 | `/update hardest` | Miembros | Primera vez: vincula la cuenta de GD con un código en los comentarios del perfil. Después: actualiza nivel, peor fallo y video |
 | `/gd cuenta [usuario]` | Miembros (con `usuario`, solo staff) | Muestra la cuenta de GD vinculada |
 | `/gd desvincular [usuario]` | Miembros (con `usuario`, solo staff) | Desvincula la cuenta y quita la entrada del Hardest |
+
+## Revisión del staff (opcional)
+
+Con `/setup revision canal`, cada `/update hardest` se envía a ese canal en vez de publicarse directo.
+El staff (permiso **Gestionar servidor**) pulsa **Aceptar** (se guarda y se actualiza el Hardest) o **Rechazar** (pide un motivo).
+En ambos casos el miembro recibe el resultado por mensaje privado. Cada miembro tiene una sola solicitud pendiente: si envía otra, reemplaza la anterior.
+Sin canal de revisión el bot funciona como siempre, publicando directo.
+
+Después de actualizar el bot hay que volver a ejecutar `npm run deploy` para registrar el comando nuevo.
+
+## Niveles aceptados
+
+Por defecto el Hardest solo acepta **Extreme Demon**. Para aceptar otros tipos de demon, edita `ALLOWED_DIFFICULTIES` en `src/config.js`
+(`'Easy Demon'`, `'Medium Demon'`, `'Hard Demon'`, `'Insane Demon'`, `'Extreme Demon'`).
+Si no se puede determinar la dificultad del nivel, se deja pasar y el staff la ve en la revisión.
+
+## Cómo se ve el Hardest
+
+- Cada entrada muestra la carita de la dificultad del nivel (imágenes públicas, no emojis del bot; la dirección está en `src/difficulty.js`).
+- Si varios miembros tienen el mismo nivel, salen juntos en una sola entrada (`#1 - Alpha & Beta`) con el fallo y el video de cada uno.
+- Los jugadores guardados antes de esta versión no tienen dificultad y se ven igual que antes, sin icono, hasta que vuelvan a usar `/update hardest`.
 
 ## Configuración visual
 

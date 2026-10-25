@@ -3,6 +3,11 @@ module.exports = {
   TOP_SIZE: 5,
   // Título del mensaje (la estrella se agrega al lado)
   TITLE: 'Server Hardest',
+  // Dificultades que se aceptan en el Hardest. Por defecto solo Extreme Demon.
+  // Para aceptar más, agrégalas a la lista, por ejemplo:
+  //   ['Extreme Demon', 'Insane Demon']
+  // Valores posibles: 'Easy Demon', 'Medium Demon', 'Hard Demon', 'Insane Demon', 'Extreme Demon'
+  ALLOWED_DIFFICULTIES: ['Extreme Demon'],
   // Subtítulo bajo el título
   SUBTITLE: 'Top Players / Hardest',
   // Indicación para los miembros, al final del mensaje

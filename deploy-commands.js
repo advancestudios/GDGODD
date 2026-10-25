@@ -17,7 +17,7 @@ const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
     await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), {
       body: [update.data.toJSON(), setup.data.toJSON(), gd.data.toJSON()],
     });
-    console.log('✅ Comandos registrados en el servidor: /update hardest, /setup embed hardest, /gd cuenta y /gd desvincular');
+    console.log('✅ Comandos registrados en el servidor: /update hardest, /setup embed hardest, /setup revision, /gd cuenta y /gd desvincular');
   } catch (err) {
     console.error(err);
     process.exit(1);

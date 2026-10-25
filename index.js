@@ -4,6 +4,7 @@ const update = require('./src/commands/update');
 const setup = require('./src/commands/setup');
 const gd = require('./src/commands/gd');
 const linkFlow = require('./src/linkFlow');
+const review = require('./src/review');
 const { ownerCount } = require('./src/permissions');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -28,6 +29,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isModalSubmit()) {
       if (interaction.customId === update.MODAL_ID) return await update.handleModal(interaction);
       if (interaction.customId === linkFlow.LINK_MODAL_ID) return await linkFlow.handleLinkModal(interaction);
+      if (review.isRejectModal(interaction)) return await review.handleRejectModal(interaction);
+    }
+    if (review.isReviewButton(interaction)) {
+      return await review.handleButton(interaction);
     }
     if (linkFlow.isLinkButton(interaction)) {
       return await linkFlow.handleButton(interaction);

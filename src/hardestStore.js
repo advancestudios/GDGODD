@@ -12,6 +12,10 @@ const DEFAULT_DATA = {
   players: {},
   // userId de Discord -> { accountId, gdName, linkedAt }  (cuenta de GD verificada)
   accounts: {},
+  // Canal donde el staff revisa las solicitudes (lo fija /setup revision canal). Sin canal, se publica directo.
+  review: { channelId: null },
+  // requestId -> { id, userId, isUpdate, player (datos a publicar), channelId, messageId, createdAt }
+  pending: {},
 };
 
 function load() {
@@ -22,6 +26,8 @@ function load() {
       message: { ...DEFAULT_DATA.message, ...(parsed.message || {}) },
       players: parsed.players || {},
       accounts: parsed.accounts || {},
+      review: { ...DEFAULT_DATA.review, ...(parsed.review || {}) },
+      pending: parsed.pending || {},
     };
   } catch (err) {
     if (err.code !== 'ENOENT') console.error('[hardestStore] No se pudo leer el JSON, se usa vacío:', err);
@@ -52,6 +58,45 @@ function setMessage({ guildId, channelId, messageId }) {
   const data = load();
   data.message = { guildId, channelId, messageId };
   save(data);
+}
+
+// ---------- Revisión del staff ----------
+
+function getReviewChannelId() {
+  return load().review.channelId;
+}
+
+function setReviewChannel(channelId) {
+  const data = load();
+  data.review = { channelId };
+  save(data);
+}
+
+function getPending(requestId) {
+  return load().pending[requestId] || null;
+}
+
+/** La solicitud pendiente de un miembro (solo hay una por miembro) */
+function findPendingByUser(userId) {
+  return Object.values(load().pending).find((request) => request.userId === userId) || null;
+}
+
+/** Guarda la solicitud de un miembro, reemplazando la anterior si la había. Devuelve la anterior (o null). */
+function putPending(request) {
+  const data = load();
+  const previous = Object.values(data.pending).find((r) => r.userId === request.userId) || null;
+  if (previous) delete data.pending[previous.id];
+  data.pending[request.id] = request;
+  save(data);
+  return previous;
+}
+
+function removePending(requestId) {
+  const data = load();
+  if (!data.pending[requestId]) return false;
+  delete data.pending[requestId];
+  save(data);
+  return true;
 }
 
 // ---------- Cuentas de GD vinculadas ----------
@@ -94,6 +139,9 @@ function unlinkAccount(userId) {
   const had = Boolean(data.accounts[userId] || data.players[userId]);
   delete data.accounts[userId];
   delete data.players[userId];
+  for (const request of Object.values(data.pending)) {
+    if (request.userId === userId) delete data.pending[request.id];
+  }
   if (had) save(data);
   return had;
 }
@@ -104,6 +152,12 @@ module.exports = {
   getPlayer,
   upsertPlayer,
   setMessage,
+  getReviewChannelId,
+  setReviewChannel,
+  getPending,
+  findPendingByUser,
+  putPending,
+  removePending,
   getAccount,
   findOwnerOfAccount,
   linkAccount,
