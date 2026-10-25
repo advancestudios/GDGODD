@@ -6,7 +6,7 @@ const {
   MessageFlags,
   escapeMarkdown,
 } = require('discord.js');
-const { TOP_SIZE, TITLE, FOOTER_TEXT, EMPTY, EMOJIS } = require('./config');
+const { TOP_SIZE, TITLE, SUBTITLE, UPDATE_HINT, FOOTER_TEXT, EMPTY, EMOJIS } = require('./config');
 
 // Discord permite como máximo 4000 caracteres de texto sumando todos los bloques de un mensaje
 const MAX_TEXT = 3900;
@@ -54,12 +54,12 @@ const gap = (spacing) => new SeparatorBuilder().setDivider(false).setSpacing(spa
 
 function buildContents(ranked) {
   const title = `# ${TITLE}${EMOJIS.star ? ` ${EMOJIS.star}` : ''}`;
-  const header = [title, '-# Top Players / Hardest'];
+  const header = [title, `-# ${SUBTITLE}`];
   const body = ranked.length
     ? ranked.map((p, i) => playerBlock(p, i + 1))
     : ['*Todavía no hay nadie en el Hardest. ¡Sé el primero!*'];
   const footer = [
-    '-# Para actualizar tu Hardest, usa `/update hardest` y sigue los pasos dentro del cuadro de Diálogo.',
+    `-# ${UPDATE_HINT}`,
     `-# ${FOOTER_TEXT}`,
   ];
   return { header, body, footer };

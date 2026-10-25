@@ -40,4 +40,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-client.login(process.env.DISCORD_TOKEN);
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason);
+});
+
+function shutdown(signal) {
+  console.log(`Recibí ${signal}, cerrando el bot...`);
+  client.destroy().finally(() => process.exit(0));
+}
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));
+
+client.login(process.env.DISCORD_TOKEN).catch((err) => {
+  console.error('❌ No pude iniciar sesión (revisa DISCORD_TOKEN en el .env):', err.message);
+  process.exit(1);
+});

@@ -3,6 +3,10 @@ module.exports = {
   TOP_SIZE: 5,
   // Título del mensaje (la estrella se agrega al lado)
   TITLE: 'Server Hardest',
+  // Subtítulo bajo el título
+  SUBTITLE: 'Top Players / Hardest',
+  // Indicación para los miembros, al final del mensaje
+  UPDATE_HINT: 'Para actualizar tu Hardest, usa `/update hardest` y sigue los pasos dentro del cuadro de Diálogo.',
   // Texto del pie del mensaje
   FOOTER_TEXT: '© Urugordos - 2026',
   // Valor que se muestra cuando un campo está vacío
