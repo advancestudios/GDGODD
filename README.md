@@ -26,6 +26,11 @@ Variables del `.env`: ver [`.env.example`](.env.example).
 | `/update hardest` | Miembros | Primera vez: vincula la cuenta de GD con un código en los comentarios del perfil. Después: actualiza nivel, peor fallo y video |
 | `/gd cuenta [usuario]` | Miembros (con `usuario`, solo staff) | Muestra la cuenta de GD vinculada |
 | `/gd desvincular [usuario]` | Miembros (con `usuario`, solo staff) | Desvincula la cuenta y quita la entrada del Hardest |
+| `/help` | Todos | Lista los comandos; el botón **Cómo Usar** explica el paso a paso y **Atrás** vuelve |
+
+## Fuentes de niveles
+
+Por ID, el bot consulta en orden: **Pointercrate** → **AREDL** → servidores oficiales de GD → GDBrowser. Pointercrate y AREDL son listas distintas, así que sus posiciones no son comparables entre sí.
 
 ## Revisión del staff (opcional)
 
