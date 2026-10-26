@@ -3,10 +3,12 @@
  *
  * Orden de consulta:
  *  1) Pointercrate (Demon List): nombre y posición (Top). Solo tiene los niveles que están en la lista.
- *  2) Servidores oficiales de GD (los mismos que usa el juego): tienen TODOS los niveles subidos.
- *     Dan el nombre; el Top queda vacío porque no es un nivel de la lista. Si responden "-1",
+ *  2) AREDL (All Rated Extreme Demon List): nombre y posición para los Extreme Demons que no están
+ *     en Pointercrate (la AREDL tiene muchos más).
+ *  3) Servidores oficiales de GD (los mismos que usa el juego): tienen TODOS los niveles subidos.
+ *     Dan el nombre; el Top queda vacío porque no es un nivel de ninguna lista. Si responden "-1",
  *     el nivel de verdad no existe.
- *  3) GDBrowser (último respaldo): su propio "-1" NO prueba que el nivel no exista (suele fallar
+ *  4) GDBrowser (último respaldo): su propio "-1" NO prueba que el nivel no exista (suele fallar
  *     por sus límites), así que solo se usa para encontrar el nombre.
  *
  * Optimizaciones para que no falle seguido:
@@ -26,6 +28,7 @@
 const { request, parseJson } = require('./http');
 
 const POINTERCRATE_URL = 'https://pointercrate.com/api/v2/demons/listed/';
+const AREDL_URL = 'https://api.aredl.net/v2/api/aredl/levels/';
 const GD_SERVER_URL = 'http://www.boomlings.com/database/getGJLevels21.php';
 const GDBROWSER_URL = 'https://gdbrowser.com/api/level/';
 // Clave pública que usa el juego para sus búsquedas (no es un secreto)
@@ -54,6 +57,31 @@ async function fromPointercrate(levelId) {
     // La Demon List solo incluye Extreme Demons; se afina con los servidores de GD si responden
     difficulty: 'Extreme Demon',
     source: 'pointercrate',
+  };
+}
+
+/**
+ * AREDL: GET /v2/api/aredl/levels/{level_id}. 404 = ese nivel no está en la AREDL.
+ * @returns {Promise<{name:string, top:number|null, difficulty:string, source:string}|null>}
+ */
+async function fromAredl(levelId) {
+  const { status, body } = await request(`${AREDL_URL}${levelId}`);
+  if (status === 404) return null;
+  if (status < 200 || status >= 300) throw new Error(`AREDL respondió HTTP ${status}`);
+
+  const json = parseJson(body);
+  if (!json || typeof json !== 'object' || !json.name) throw new Error('AREDL: respuesta inesperada');
+  // Si la API devuelve otro nivel distinto al pedido, se descarta
+  if (json.level_id !== undefined && String(json.level_id) !== String(levelId)) {
+    throw new Error('AREDL: la respuesta no corresponde a ese ID');
+  }
+
+  return {
+    name: String(json.name),
+    top: Number.isInteger(json.position) && json.position > 0 ? json.position : null,
+    // La AREDL solo incluye Extreme Demons; se afina con los servidores de GD si responden
+    difficulty: 'Extreme Demon',
+    source: 'aredl',
   };
 }
 
@@ -127,18 +155,28 @@ async function fromGdBrowser(levelId) {
   throw new Error(`GDBrowser respondió HTTP ${status}`);
 }
 
+/** Mejor esfuerzo: los servidores de GD dicen la dificultad exacta; si fallan se queda "Extreme Demon" */
+async function refineDifficulty(listed, levelId) {
+  const gd = await fromGdServers(levelId).catch(() => null);
+  if (gd?.difficulty) listed.difficulty = gd.difficulty;
+  return listed;
+}
+
 async function search(levelId) {
-  // 1) Demon List (Top + nombre)
+  // 1) Pointercrate (Top + nombre)
   try {
     const listed = await fromPointercrate(levelId);
-    if (listed) {
-      // Mejor esfuerzo: los servidores de GD dicen la dificultad exacta; si fallan se queda "Extreme Demon"
-      const gd = await fromGdServers(levelId).catch(() => null);
-      if (gd?.difficulty) listed.difficulty = gd.difficulty;
-      return listed;
-    }
+    if (listed) return await refineDifficulty(listed, levelId);
   } catch (err) {
     console.warn('[levelLookup] Pointercrate falló:', err.message);
+  }
+
+  // 1b) AREDL (Top + nombre) para los que Pointercrate no tiene
+  try {
+    const listed = await fromAredl(levelId);
+    if (listed) return await refineDifficulty(listed, levelId);
+  } catch (err) {
+    console.warn('[levelLookup] AREDL falló:', err.message);
   }
 
   // 2) Servidores oficiales de GD (el único "no existe" que se considera definitivo)
@@ -187,6 +225,6 @@ module.exports = {
   clearCache,
   LookupError,
   // Para el script de diagnóstico y las pruebas
-  sources: { fromPointercrate, fromGdServers, fromGdBrowser },
+  sources: { fromPointercrate, fromAredl, fromGdServers, fromGdBrowser },
   _internals: { request, parseGdLevel, gdDifficulty },
 };
