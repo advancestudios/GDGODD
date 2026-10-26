@@ -10,6 +10,7 @@ if (!id || !/^\d{1,12}$/.test(id)) {
 
 const labels = {
   fromPointercrate: 'Pointercrate (Demon List)',
+  fromAredl: 'AREDL',
   fromGdServers: 'Servidores oficiales de GD',
   fromGdBrowser: 'GDBrowser (respaldo)',
 };
