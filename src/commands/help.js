@@ -35,6 +35,7 @@ const COMMANDS = [
   '• `/setup embed hardest` — Elige el canal donde vive el mensaje del Hardest.',
   '• `/setup revision canal` — Activa la revisión del staff en un canal.',
   '• `/setup revision desactivar` — Desactiva la revisión (se publica directo).',
+  '• `/send canal:` — Envía un mensaje del bot a un canal (modo normal o embed).',
   '• `/gd cuenta usuario:` y `/gd desvincular usuario:` — Ver o desvincular a otro miembro.',
 ].join('\n');
 

@@ -23,6 +23,7 @@ Variables del `.env`: ver [`.env.example`](.env.example).
 | `/setup embed hardest canal:#canal` | Staff (Gestionar servidor) o dueños | Envía el embed al canal y lo deja configurado para editarlo ahí |
 | `/setup revision canal canal:#canal` | Staff o dueños | Activa la revisión: las actualizaciones llegan a ese canal con botones Aceptar / Rechazar |
 | `/setup revision desactivar` | Staff o dueños | Desactiva la revisión: las actualizaciones se publican directo |
+| `/send canal:#canal [modo]` | Staff o dueños | Abre un cuadro para escribir el mensaje y lo envía con el bot. Modo `normal` (texto) o `embed` (Components V2 con título opcional). Menciona usuarios y roles, nunca @everyone |
 | `/update hardest` | Miembros | Primera vez: vincula la cuenta de GD con un código en los comentarios del perfil. Después: actualiza nivel, peor fallo y video |
 | `/gd cuenta [usuario]` | Miembros (con `usuario`, solo staff) | Muestra la cuenta de GD vinculada |
 | `/gd desvincular [usuario]` | Miembros (con `usuario`, solo staff) | Desvincula la cuenta y quita la entrada del Hardest |

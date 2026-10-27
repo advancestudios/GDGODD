@@ -4,6 +4,7 @@ const update = require('./src/commands/update');
 const setup = require('./src/commands/setup');
 const gd = require('./src/commands/gd');
 const help = require('./src/commands/help');
+const send = require('./src/commands/send');
 const linkFlow = require('./src/linkFlow');
 const review = require('./src/review');
 const { ownerCount } = require('./src/permissions');
@@ -15,6 +16,7 @@ const commands = new Map([
   [setup.data.name, setup],
   [gd.data.name, gd],
   [help.data.name, help],
+  [send.data.name, send],
 ]);
 
 client.once(Events.ClientReady, (c) => {
@@ -31,6 +33,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isModalSubmit()) {
       if (interaction.customId === update.MODAL_ID) return await update.handleModal(interaction);
       if (interaction.customId === linkFlow.LINK_MODAL_ID) return await linkFlow.handleLinkModal(interaction);
+      if (send.isSendModal(interaction)) return await send.handleModal(interaction);
       if (review.isRejectModal(interaction)) return await review.handleRejectModal(interaction);
     }
     if (help.isHelpButton(interaction)) {
